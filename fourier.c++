@@ -1,3 +1,11 @@
+/* To Do:
+ * Fix timestep/tstop to not cut off mid frequency
+ * Refactor/clean up code
+ *  
+
+*/
+
+
 // #include <cmath.h>
 #include <iostream>
 #include <stdio.h>   /* Standard Library of Input and Output */
@@ -16,28 +24,21 @@ using std::chrono::system_clock;
 
 #define M_PI 3.14159265358979323846
 
-/* Inverse Fourier transform
- *  f(t) = 1/(2π) ∫F(ω)e^(iωt) dω
- *
- * f(t): original function in the time domain.
- * F(ω): fouier transform of f(t) in frequency domain
- * w: Angular Frequency
- * 1/(2π) norm factor
- *
- * Forward Fourier transform
- *  F(ω) = ∫f(t)e^(-iωt) dt
- *
- */
 
-std::complex<double> complexExponential(double f, double t)
+array<double, 2> calculationHelper(double f, double t, double M)
 {
-    std::complex<double> exponent(0, -2 * M_PI * f * t); // -2πi * f * t
-    return std::exp(exponent);
-}
+    // M represents the total time the program for each frequency runs through
+    double inputSignal = (cos(2 * M_PI * t));   
+    double windowFunction = 0.5 * (1 - cos(2 * M_PI * t / M)); 
 
-array<double, 2> finalCalculation(double f, double t)
-{
-    std::complex<double> result = (cos(6 * M_PI * t) + 1) * complexExponential(f, t);
+    // double windowFunction = 0.5*(1+cos( (2*M_PI*(t + 2*M)) / M )); // 5 is the delta time so 2M
+    
+    inputSignal *= windowFunction;
+
+
+    std::complex<double> result = inputSignal * (cexp(-2 * M_PI * I * f * t));
+
+    
 
     array<double, 2> temp;
     temp[0] = result.real();
@@ -46,11 +47,9 @@ array<double, 2> finalCalculation(double f, double t)
     return temp;
 }
 
-array<double, 2> calculateCenter(vector<array<double, 2>> points, double dT)
+array<double, 2> calculateIntegral(vector<array<double, 2>> points, double dT)
 {
-    // this must do the integral section of the equation
-    // for visualizing it we must multiply my 1 / (t2-t1)
-    // this gets dropped later
+    // Calculates the integral using a vector of all the points and the trapezoidal method
 
     int n = points.size();
     complex<double> integral(0.0, 0.0);
@@ -81,21 +80,21 @@ array<double, 2> calculateCenter(vector<array<double, 2>> points, double dT)
     temp[0] = x_polar;
     temp[1] = y_polar;
 
-    //printf("!Center Point Location: %f %f \n", temp[0], temp[1]);
-
     return temp;
 }
 
-void DFT(double f, double t, double tStop, double dT, bool usingAnim)
+void DFT(double f, double t, double tStop, double dT, bool usingAnim, double M)
 {
     vector<array<double, 2>> points;
 
+    // Calcualtes all the that make up the integral for the given wrapping frequency
     while (t < tStop)
     {
         t += dT;
-        points.push_back(finalCalculation(f, t));
+        points.push_back(calculationHelper(f, t, M)); // Keeps a list of the results for all t values
     }
 
+    // Printing results in either anim format or plot format
     if (usingAnim)
     {
 
@@ -109,7 +108,7 @@ void DFT(double f, double t, double tStop, double dT, bool usingAnim)
         printf("l 0 -2 0 2\n");
         printf("t -2 2 \n Wrapping Frequency: %f \n", f);
 
-        array<double, 2> temp = calculateCenter(points, dT);
+        array<double, 2> temp = calculateIntegral(points, dT);
         for (int i = 0; i < 50; i++)
         {
             printf("c %f %f 0.1\n", temp[0], temp[1]);
@@ -118,46 +117,42 @@ void DFT(double f, double t, double tStop, double dT, bool usingAnim)
         printf("F\n");
         points.clear();
     }
-    else if(!usingAnim){
-        array<double, 2> temp = calculateCenter(points, dT);
-        printf("%f %f\n", f, temp[1]);    
+    else if (!usingAnim)
+    {
+        array<double, 2> temp = calculateIntegral(points, dT);
+        printf("%f %f\n", f, hypot(temp[0], temp[1]));
     }
 }
 
 int main(int argc, char const *argv[])
 {
-    bool usingAnim;
-    if(argc != 2){
-        printf("INVALID USE: [a/g]");
+    bool usingAnim = false;
+    if (argc != 2)
+    {
+        printf("INVALID USE - Please Use one of the formats: \n ./a.out a | anim or ./a.out p | plot\n");
         return 0;
     }
-    else{
-        if(*argv[1] == 'a')
-        {
-            usingAnim = true; 
-        }
-        else
-        {
-            usingAnim = false;
-        }
-    }
-    
-    
-    vector<array<double, 2>> points;
-
-    double f = 0;    // Frequency
-    double t = 1.0;    // Time
-    double dT = 0.001; // Time Step
-    double dF = 0.001; // Frequency Step
-
-    double tStop = 5; // Max Time simulated for each f
-    double fStop = 5;
-    // calculate points across time
-    while (f <= 10)
+    else if (*argv[1] == 'a')
     {
+        usingAnim = true;
+    }
+
+    double f = 0;       // Starting Wrapping Frequency
+    double t = -2.5;    // Stating Time
+    double dT = 0.001;  // Time Step
+
+    double dF = 0.001; // Frequency Step
+    // double dF = 2; // Frequency Step
+
+
+    double tStop = 10; // Max Time simulated for each f
+    double fStop = 5;   // Max frequency the simulation runs to
+
+    // calculate points across time
+    while (f <= fStop)
+    {
+        DFT(f, t, tStop, dT, usingAnim, abs(t) + abs(tStop));
         f += dF;
-        DFT(f, t, tStop, dT, usingAnim);
-        if(usingAnim){sleep_for(10ms);}
     }
 
     return 0;
