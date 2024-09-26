@@ -57,7 +57,7 @@ array<double, 2> calculateIntegral(vector<array<double, 2>> points, double dT)
     // First and last points
     complex<double> first(points[0][0], points[0][1]);
     complex<double> last(points[n - 1][0], points[n - 1][1]);
-
+    
     // Apply the trapezoidal rule
     integral += first + last;
 
