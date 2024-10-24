@@ -95,37 +95,45 @@ void applyWindowFunction(CArray &signal, double M)
 
 int main()
 {
-    const int N = 8; // Small 8x8 checkerboard for demonstration
-
-    // Create a 2D checkerboard pattern
+    const int N = 64; // Small 8x8 checkerboard for demonstration
     vector<CArray> checkerboard(N, CArray(N));
-
-    for (int i = 0; i < N; i++)
-    {
-        for (int j = 0; j < N; j++)
-        {
-            // Alternate between 0 and 1 to create a checkerboard pattern
-            checkerboard[i][j] = ((i / 2) % 2 == (j / 2) % 2) ? -1.0 : 1.0;
-        }
-    }
-
-    // More complex signal
+    
+    
+    // Create a 2D checkerboard pattern
     // for (int i = 0; i < N; i++)
     // {
     //     for (int j = 0; j < N; j++)
     //     {
-    //         checkerboard[i][j] = sin(2 * M_PI * i / N) + cos(2 * M_PI * j / N);
+    //         // Alternate between 0 and 1 to create a checkerboard pattern
+    //         // checkerboard[i][j] = ((i / 2) % 2 == (j / 2) % 2) ? -1.0 : 1.0;
+    //         checkerboard[i][j] = 1 * cos(16.0 * (double)i * M_PI / N) * sin(8.0 * (double)j * M_PI / N) + 0.2;
     //     }
     // }
 
-    // Print the original checkerboard pattern
-    cout << "Original Checkerboard Pattern:" << endl;
+    // More complex signal
+    for (int i = 0; i < N; i++)
+    {
+        for (int j = 0; j < N; j++)
+        {
+            checkerboard[i][j] = sin(2 * M_PI * i / N) + cos(2 * M_PI * j / N) + cos(M_PI * i);
+        }
+    }
+
+    // Print the original pattern
+    cout << "Original Pattern:" << endl;
+
+    double orig[N][N];
+    int i = 0, j = 0;
     for (const auto &row : checkerboard)
     {
+        j = 0;
         for (const auto &value : row)
         {
             cout << value.real() << " ";
+            orig[i][j] = value.real();
+            j++;
         }
+        i++;
         cout << endl;
     }
 
@@ -134,12 +142,47 @@ int main()
 
     // Output the 2D FFT result (real and imaginary parts)
     cout << "\n2D FFT Result (Real and Imaginary Parts):" << endl;
+
+    i = 0;
+    j = 0;
+    double mag[N][N];
+    double biggest = 0;
     for (const auto &row : checkerboard)
     {
+        j = 0;
         for (const auto &value : row)
         {
-            cout << "(" << abs(value) << ") ";
+            mag[i][j] = abs(value);
+            if (abs(value) > biggest)
+                biggest = abs(value);
+            
+            j++;
         }
-        cout << endl;
+        i++;
+    }
+
+    for (i = 0; i < N; i++)
+        for (j = 0; j < N; j++)
+            mag[i][j] /= biggest / N;
+
+    while (1)
+    {
+        for (int i = 0; i < N - 1; i++)
+        {
+            for (int j = 0; j < N - 1; j++)
+            {
+                printf("q3 %d %d %e %d %d %e %d %d %e %d %d %e\n", i, j, mag[i][j], i + 1, j, mag[i + 1][j], i + 1, j + 1, mag[i + 1][j + 1], i, j + 1, mag[i][j + 1]);
+            }
+        }
+        for (int i = 0; i < N - 1; i++)
+        {
+            for (int j = 0; j < N - 1; j++)
+            {
+
+                printf("!q3 %d %d %e %d %d %e %d %d %e %d %d %e\n", i, j, orig[i][j], i + 1, j, orig[i + 1][j], i + 1, j + 1, orig[i + 1][j + 1], i, j + 1, orig[i][j + 1]);
+            }
+        }
+        printf("!F\n");
+        printf("F\n");
     }
 }

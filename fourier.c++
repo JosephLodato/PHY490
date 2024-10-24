@@ -1,10 +1,9 @@
 /* To Do:
  * Fix timestep/tstop to not cut off mid frequency
  * Refactor/clean up code
- *  
+ *
 
 */
-
 
 // #include <cmath.h>
 #include <iostream>
@@ -24,21 +23,17 @@ using std::chrono::system_clock;
 
 #define M_PI 3.14159265358979323846
 
-
 array<double, 2> calculationHelper(double f, double t, double M)
 {
     // M represents the total time the program for each frequency runs through
-    double inputSignal = (cos(2 * M_PI * t));   
-    double windowFunction = 0.5 * (1 - cos(2 * M_PI * t / M)); 
+    double inputSignal = (cos(2 * M_PI * t));
+    double windowFunction = 0.5 * (1 - cos(2 * M_PI * t / M));
 
     // double windowFunction = 0.5*(1+cos( (2*M_PI*(t + 2*M)) / M )); // 5 is the delta time so 2M
-    
+
     inputSignal *= windowFunction;
 
-
     std::complex<double> result = inputSignal * (cexp(-2 * M_PI * I * f * t));
-
-    
 
     array<double, 2> temp;
     temp[0] = result.real();
@@ -57,7 +52,7 @@ array<double, 2> calculateIntegral(vector<array<double, 2>> points, double dT)
     // First and last points
     complex<double> first(points[0][0], points[0][1]);
     complex<double> last(points[n - 1][0], points[n - 1][1]);
-    
+
     // Apply the trapezoidal rule
     integral += first + last;
 
@@ -137,16 +132,15 @@ int main(int argc, char const *argv[])
         usingAnim = true;
     }
 
-    double f = 0;       // Starting Wrapping Frequency
-    double t = -2.5;    // Stating Time
-    double dT = 0.001;  // Time Step
+    double f = 0;      // Starting Wrapping Frequency
+    double t = -2.5;   // Stating Time
+    double dT = 0.001; // Time Step
 
     double dF = 0.001; // Frequency Step
     // double dF = 2; // Frequency Step
 
-
     double tStop = 10; // Max Time simulated for each f
-    double fStop = 5;   // Max frequency the simulation runs to
+    double fStop = 5;  // Max frequency the simulation runs to
 
     // calculate points across time
     while (f <= fStop)
