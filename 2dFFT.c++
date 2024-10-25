@@ -16,6 +16,47 @@ using std::chrono::system_clock;
 using Complex = std::complex<double>;
 using CArray = std::valarray<Complex>;
 
+// Reads in images that have been passed through readImage.py and updates the red, green, and blue arrays, as well as height and width.
+void readfile(vector<CArray> &red, vector<CArray> &green, vector<CArray> &blue, int &width, int &height, const char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+
+    if (!fp)
+    {
+        printf("You told me to read file %s but I can't so I am sad and going to go away now.\n", filename);
+        exit(-2);
+    }
+
+    fscanf(fp, "%d %d", &width, &height);
+
+    printf("Width = %d, height = %d\n", width, height);
+
+    red.resize(width, CArray(height));
+    green.resize(width, CArray(height));
+    blue.resize(width, CArray(height));
+
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            int ii, jj;
+            double rhere, ghere, bhere;
+            fscanf(fp, "%d %d : %lf %lf %lf", &ii, &jj, &rhere, &ghere, &bhere);
+
+            if (i != ii || j != jj)
+            {
+                printf("Warning -- expected pixel %d, %d, but got pixel %d, %d\n", i, j, ii, jj);
+                exit(-1);
+            }
+
+            red[j][i] = rhere;
+            green[j][i] = ghere;
+            blue[j][i] = bhere;
+        }
+    }
+    fclose(fp);
+}
+
 // FFT function
 void fft(CArray &x)
 {
@@ -82,107 +123,39 @@ void fft2D(vector<CArray> &matrix)
     transpose(matrix);
 }
 
-// Helper function to apply a window function to each row
-void applyWindowFunction(CArray &signal, double M)
-{
-    for (size_t i = 0; i < signal.size(); i++)
-    {
-        double t = i * (M / signal.size()); // Scale t across the window
-        double windowFunction = 0.5 * (1 - cos(2 * M_PI * t / M));
-        signal[i] *= windowFunction;
-    }
-}
-
 int main()
 {
-    const int N = 64; // Small 8x8 checkerboard for demonstration
-    vector<CArray> checkerboard(N, CArray(N));
-    
-    
-    // Create a 2D checkerboard pattern
-    // for (int i = 0; i < N; i++)
+    vector<CArray> red, green, blue;
+    int width = 0, height = 0;
+
+    const char filename[] = "img.txt";
+
+    // Call the readFile function
+    readfile(red, green, blue, width, height, filename);
+
+    // Test to see if the image is imported correctly
+    // for (int i = 0; i < width; i++)
     // {
-    //     for (int j = 0; j < N; j++)
+    //     for (int j = 0; j < height; j++)
     //     {
-    //         // Alternate between 0 and 1 to create a checkerboard pattern
-    //         // checkerboard[i][j] = ((i / 2) % 2 == (j / 2) % 2) ? -1.0 : 1.0;
-    //         checkerboard[i][j] = 1 * cos(16.0 * (double)i * M_PI / N) * sin(8.0 * (double)j * M_PI / N) + 0.2;
+    //         printf("Pixel (%d, %d): Red = %f, Green = %f, Blue = %f\n", i, j, red[i][j].real(), green[i][j].real(), blue[i][j].real());
     //     }
     // }
 
-    // More complex signal
-    for (int i = 0; i < N; i++)
+
+    // Perform 2D FFT on all color channels
+    fft2D(red);
+    fft2D(green);
+    fft2D(blue);
+
+    // print the output in a format the converter likes
+    for (int i = 0; i < width; i++)
     {
-        for (int j = 0; j < N; j++)
+        for (int j = 0; j < height; j++)
         {
-            checkerboard[i][j] = sin(2 * M_PI * i / N) + cos(2 * M_PI * j / N) + cos(M_PI * i);
+            printf("%d %d %f %f %f\n", i, j, red[i][j].real(), green[i][j].real(), blue[i][j].real());
         }
     }
 
-    // Print the original pattern
-    cout << "Original Pattern:" << endl;
-
-    double orig[N][N];
-    int i = 0, j = 0;
-    for (const auto &row : checkerboard)
-    {
-        j = 0;
-        for (const auto &value : row)
-        {
-            cout << value.real() << " ";
-            orig[i][j] = value.real();
-            j++;
-        }
-        i++;
-        cout << endl;
-    }
-
-    // Perform 2D FFT
-    fft2D(checkerboard);
-
-    // Output the 2D FFT result (real and imaginary parts)
-    cout << "\n2D FFT Result (Real and Imaginary Parts):" << endl;
-
-    i = 0;
-    j = 0;
-    double mag[N][N];
-    double biggest = 0;
-    for (const auto &row : checkerboard)
-    {
-        j = 0;
-        for (const auto &value : row)
-        {
-            mag[i][j] = abs(value);
-            if (abs(value) > biggest)
-                biggest = abs(value);
-            
-            j++;
-        }
-        i++;
-    }
-
-    for (i = 0; i < N; i++)
-        for (j = 0; j < N; j++)
-            mag[i][j] /= biggest / N;
-
-    while (1)
-    {
-        for (int i = 0; i < N - 1; i++)
-        {
-            for (int j = 0; j < N - 1; j++)
-            {
-                printf("q3 %d %d %e %d %d %e %d %d %e %d %d %e\n", i, j, mag[i][j], i + 1, j, mag[i + 1][j], i + 1, j + 1, mag[i + 1][j + 1], i, j + 1, mag[i][j + 1]);
-            }
-        }
-        for (int i = 0; i < N - 1; i++)
-        {
-            for (int j = 0; j < N - 1; j++)
-            {
-
-                printf("!q3 %d %d %e %d %d %e %d %d %e %d %d %e\n", i, j, orig[i][j], i + 1, j, orig[i + 1][j], i + 1, j + 1, orig[i + 1][j + 1], i, j + 1, orig[i][j + 1]);
-            }
-        }
-        printf("!F\n");
-        printf("F\n");
-    }
+    return 0;
 }
