@@ -35,5 +35,6 @@ arrayfromimage = np.array(newIm)
 for i in range(height):
     for j in range(width):
         print ("%d %d : %d %d %d" % (i, j, arrayfromimage[i, j, 0], arrayfromimage[i, j, 1], arrayfromimage[i, j, 2]))
+        # print ("%d %d : %d %d %d" % (i, j, arrayfromimage[i, j], arrayfromimage[i, j], arrayfromimage[i, j]))
 
 

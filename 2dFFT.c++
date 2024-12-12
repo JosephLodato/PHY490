@@ -1,33 +1,13 @@
 #include <iostream>
 #include <complex>
-#include <cmath>
-#include <vector>
-#include <valarray> // For FFT
-#include <chrono>
-#include <thread>
-#include <map>
+#include <valarray>
 
 using namespace std;
-using namespace std::this_thread;     // sleep_for, sleep_until
-using namespace std::chrono_literals; // ns, us, ms, s, h, etc.
-using std::chrono::system_clock;
 
 #define M_PI 3.14159265358979323846
 
 using Complex = std::complex<double>;
 using CArray = std::valarray<Complex>;
-
-int cutoffs = 0;
-/*
- * HOW TO USE FILES:
- * 1. Run readImage.py with this command
- *      python3 readImage.py [image path] >> img.txt
- * 2. Run this file with this command
- *      ./2dFFT.o >> FFTIMG.txt
- * 3. Run createImg.py to turn it back into an image
- *      python3 createImg.py FFTImg.txt transformed.jpg 8
-
-*/
 
 // Reads in images that have been passed through readImage.py and updates the red, green, and blue arrays, as well as height and width.
 void readfile(vector<CArray> &red, vector<CArray> &green, vector<CArray> &blue, int &width, int &height, const char *filename)
@@ -216,80 +196,11 @@ void fftShift(vector<CArray> &matrix)
     }
 }
 
-/*
- * Methods that opperate on trtransformed images:
- */
-
-// Function to calculate the Euclidean distance
-double distanceFromCenter(int u, int v, int centerU, int centerV)
-{
-    return sqrt((u - centerU) * (u - centerU) + (v - centerV) * (v - centerV));
-}
-
-// High-pass filter: keeps frequencies above the cutoff
-void highPassFilter(vector<CArray> &matrix, int width, int height, double cutoff)
-{
-    int centerU = width / 2;
-    int centerV = height / 2;
-
-    for (int u = 0; u < width; ++u)
-    {
-        for (int v = 0; v < height; ++v)
-        {
-            double dist = distanceFromCenter(u, v, centerU, centerV);
-            if (dist < cutoff)
-            {
-                matrix[u][v] = 0; // Zero out low frequencies
-                cutoffs++;
-                // std::cerr << "!Pixel Cut off\n";
-            }
-        }
-    }
-}
-
-// Low-pass filter: keeps frequencies below the cutoff
-void lowPassFilter(vector<CArray> &matrix, int width, int height, double cutoff)
-{
-    int centerU = width / 2;
-    int centerV = height / 2;
-
-    for (int u = 0; u < width; ++u)
-    {
-        for (int v = 0; v < height; ++v)
-        {
-            double dist = distanceFromCenter(u, v, centerU, centerV);
-            if (dist > cutoff)
-            {
-                matrix[u][v] = 0; // Zero out high frequencies
-            }
-        }
-    }
-}
-
-// Band-pass filter: keeps frequencies within a specific range
-void bandPassFilter(vector<CArray> &matrix, int width, int height, double lowCutoff, double highCutoff)
-{
-    int centerU = width / 2;
-    int centerV = height / 2;
-
-    for (int u = 0; u < width; ++u)
-    {
-        for (int v = 0; v < height; ++v)
-        {
-            double dist = distanceFromCenter(u, v, centerU, centerV);
-            if (dist < lowCutoff || dist > highCutoff)
-            {
-                matrix[u][v] = 0; // Zero out frequencies outside the band
-            }
-        }
-    }
-}
-
 // ****************************************************************************
 // ********************** JWST Miror Extraction Methods ***********************
 // ****************************************************************************
 
-// Helper function to calculate angle from center
+// Helper function to calculate angle from center of the image
 double calculateAngle(int x, int y, int centerX, int centerY)
 {
     return atan2(y - centerY, x - centerX) * (180.0 / M_PI); // Convert to degrees
@@ -301,64 +212,74 @@ void analyzeDiffractionSpikes(const vector<CArray> &matrix, int width, int heigh
     int centerX = width / 2;
     int centerY = height / 2;
 
-    // // Find the maximum intensity (excluding DC component)
-    // double maxIntensity = 0.0;
-    // for (int x = 0; x < width; ++x)
-    // {
-    //     for (int y = 0; y < height; ++y)
-    //     {
-    //         if (x == centerX && y == centerY)
-    //             continue; // Skip DC component
-    //         maxIntensity = max(maxIntensity, abs(matrix[x][y]));
-    //     }
-    // }
-    // double threshold = 0.9 * maxIntensity; // Set threshold as 50% of the max intensity
+    // Number of angle bins (360 degrees / bin width)
+    const int numBins = 360;
+    std::vector<double> angleBins(numBins, 0.0); // Accumulate intensity per angle
 
-    // Threshold to identify high-intensity areas (spikes)
-        double threshold = 0.18 * abs(matrix[centerX][centerY]); // 10% of DC component THis got 6/8 Spikes might be good enough
-
-    // Map to store angles and intensities of spikes
-    std::map<double, double> spikeAngles;
-
+    // Loop through the matrix and calculate angle for each point
     for (int x = 0; x < width; ++x)
     {
         for (int y = 0; y < height; ++y)
         {
-            if (abs(matrix[x][y]) > threshold)
+            // Skip the center (DC component)
+            if (x == centerX && y == centerY)
+                continue;
+
+            double angle = calculateAngle(x, y, centerX, centerY);
+            // Normalize the angle to the range [0, 360)
+            if (angle < 0)
+                angle += 360;
+
+            // Convert angle to bin index
+            int bin = static_cast<int>(angle);
+            if (bin >= 0 && bin < numBins)
             {
-                double angle = calculateAngle(x, y, centerX, centerY);
-                double distance = distanceFromCenter(x, y, centerX, centerY);
-
-                // Normalize angle to 0-360 degrees
-                if (angle < 0)
-                    angle += 360;
-
-                // Save the strongest intensity for each angle
-                if (spikeAngles.find(angle) == spikeAngles.end() || abs(matrix[x][y]) > spikeAngles[angle])
-                {
-                    spikeAngles[angle] = abs(matrix[x][y]);
-                }
+                angleBins[bin] += abs(matrix[x][y]); // Accumulate intensity
             }
         }
     }
 
-    // Print out spike angles for debugging
-    std::cerr << "Spike analysis for " << channelName << " channel:\n";
-    for (const auto &entry : spikeAngles)
+    // Now analyze the angleBins to detect spikes
+    std::vector<double> spikeAngles;
+
+    // the 0.56 corresponds to 56% of max intensity, play with this value as this will not work for all images
+    double peakThreshold = 0.56 * *std::max_element(angleBins.begin(), angleBins.end()); 
+    std::vector<double> finalSpikeAngles;
+
+    for (int i = 0; i < numBins; ++i)
     {
-        std::cerr << "Angle: " << entry.first << " degrees, Intensity: " << entry.second << "\n";
+        if (angleBins[i] > peakThreshold)
+        {
+            spikeAngles.push_back(i); // Record the angle of the spike
+        }
+    }
+    
+    std::sort(spikeAngles.begin(), spikeAngles.end());
+
+    // Use std::unique with a lambda to remove adjacent angles within 1 degree
+    auto end = unique(spikeAngles.begin(), spikeAngles.end(), [](int a, int b) {
+        return abs(a - b) <= 1; // Remove if the difference is 1 or less
+    });
+    spikeAngles.erase(end, spikeAngles.end());
+
+
+    // Print out the detected spike angles and their corresponding intensities
+    std::cerr << "Detected spike angles for " << channelName << " channel:\n";
+    for (auto angle : spikeAngles)
+    {
+        std::cerr << "Angle: " << angle << " degrees, Intensity: " << angleBins[angle] << "\n"; // used for debuging 
+        std::cout << angle << " " << angleBins[angle] << "\n"; // passed on to python script
     }
 }
 
-// Use this command to execute. It gets rid of using two commands and an middle txt file
-//     ./a.o | python3 createImg.py transformed.jpg 0
 int main()
 {
     vector<CArray> red, green, blue;
     int width = 0, height = 0;
 
+    // This string is the path to the txt file representation of the image you want to read in
+    // See README for more info if needed
     const char filename[] = "JWST.txt";
-    // const char filename[] = "img.txt";
 
     // Call the readFile function
     readfile(red, green, blue, width, height, filename);
@@ -368,25 +289,17 @@ int main()
     fft2D(green);
     fft2D(blue);
 
-    // A fucntion to shift the DC componant of the transform back into the center of the image
-    // Rather then on the 4 cornors like it was before.
+    // Shift the DC componant of the transform back into the center of the image
+    // Rather then on the 4 corner like it was before.
     fftShift(red);
     fftShift(green);
     fftShift(blue);
 
+
     // Analyze diffraction spikes for mirror geometry
+    // We are only analyzing one of the color channels, I chose red but you can pick whichever channel works best
     analyzeDiffractionSpikes(red, width, height, "Red");
-    analyzeDiffractionSpikes(green, width, height, "Green");
-    analyzeDiffractionSpikes(blue, width, height, "Blue");
-
-    // std::cerr << "Num pixels cut off" << cutoffs << endl; // Goes to stderr
-
-    for (int y = 0; y < height; y++)
-    {
-        for (int x = 0; x < width; x++)
-        {
-            printf("%d %d %f %f %f\n", x, y, abs(red[x][y]), abs(green[x][y]), abs(blue[x][y]));
-        }
-    }
+    // analyzeDiffractionSpikes(green, width, height, "Green");
+    // analyzeDiffractionSpikes(blue, width, height, "Blue");
     return 0;
 }
